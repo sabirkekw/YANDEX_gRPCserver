@@ -9,10 +9,10 @@ import (
 
 type App struct {
 	GRPCServer *grpcapp.GRPCApp
-	Storage    map[string]*order.Order
+	Storage    map[string]*order.OrderData
 }
 
-func New(log *zap.SugaredLogger, port int, storage map[string]*order.Order, service grpcserver.OrderService) *App {
+func New(log *zap.SugaredLogger, port int, storage map[string]*order.OrderData, service grpcserver.OrderService) *App {
 	GRPCServer := grpcapp.NewGRPCServer(log, port, service)
 
 	return &App{

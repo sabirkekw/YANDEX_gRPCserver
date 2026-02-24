@@ -4,22 +4,24 @@ import (
 	"context"
 
 	"github.com/sabirkekw/YANDEX_gRPCserver/internal/models/order"
-	proto "github.com/sabirkekw/YANDEX_gRPCserver/proto/order"
+	proto "github.com/sabirkekw/YANDEX_gRPCserver/pkg/api/test"
 	"go.uber.org/zap"
 	grpc "google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 type OrderService interface {
-	CreateOrder(ctx context.Context, order *order.Order) (string, error)
-	GetOrder(ctx context.Context, id string) (*order.Order, error)
-	UpdateOrder(ctx context.Context, order *order.Order) error
-	DeleteOrder(ctx context.Context, id string) error
-	ListOrders(ctx context.Context) ([]*order.Order, error)
+	CreateOrder(ctx context.Context, order *order.OrderData) (string, error)
+	GetOrder(ctx context.Context, id string) (*order.OrderData, error)
+	UpdateOrder(ctx context.Context, order *order.OrderData) (*order.OrderData, error)
+	DeleteOrder(ctx context.Context, id string) (bool, error)
+	ListOrders(ctx context.Context) ([]*order.OrderData, error)
 }
 
 type Server struct {
 	Service OrderService
-	Logger *zap.SugaredLogger
+	Logger  *zap.SugaredLogger
 	proto.UnimplementedOrderServiceServer
 }
 
@@ -37,13 +39,13 @@ func Register(grpc *grpc.Server, server *Server) {
 func (s *Server) CreateOrder(ctx context.Context, req *proto.CreateOrderRequest) (*proto.CreateOrderResponse, error) {
 	const op = "Server.CreateOrder"
 	s.Logger.Infow("Received CreateOrder request", "item", req.GetItem(), "quantity", req.GetQuantity(), "op", op)
-	order := &order.Order{
-		Item:    req.GetItem(),
+	order := &order.OrderData{
+		Item:     req.GetItem(),
 		Quantity: req.GetQuantity(),
 	}
 	id, err := s.Service.CreateOrder(ctx, order)
 	if err != nil {
-		return nil, err
+		return nil, status.Errorf(codes.InvalidArgument, "invalid order data")
 	}
 
 	return &proto.CreateOrderResponse{Id: id}, nil
@@ -54,11 +56,11 @@ func (s *Server) GetOrder(ctx context.Context, req *proto.GetOrderRequest) (*pro
 	s.Logger.Infow("Received GetOrder request", "id", req.GetId(), "op", op)
 	order, err := s.Service.GetOrder(ctx, req.GetId())
 	if err != nil {
-		return nil, err
+		return nil, status.Errorf(codes.InvalidArgument, "invalid order ID")
 	}
 	return &proto.GetOrderResponse{
 		Order: &proto.Order{
-			Id:       order.ID,
+			Id:       req.GetId(),
 			Item:     order.Item,
 			Quantity: order.Quantity,
 		},
@@ -68,24 +70,33 @@ func (s *Server) GetOrder(ctx context.Context, req *proto.GetOrderRequest) (*pro
 func (s *Server) UpdateOrder(ctx context.Context, req *proto.UpdateOrderRequest) (*proto.UpdateOrderResponse, error) {
 	const op = "Server.UpdateOrder"
 	s.Logger.Infow("Received UpdateOrder request", "id", req.GetId(), "item", req.GetItem(), "quantity", req.GetQuantity(), "op", op)
-	order := &order.Order{
+	order := &order.OrderData{
 		ID:       req.GetId(),
 		Item:     req.GetItem(),
 		Quantity: req.GetQuantity(),
 	}
-	if err := s.Service.UpdateOrder(ctx, order); err != nil {
-		return nil, err
+
+	updatedOrder, err := s.Service.UpdateOrder(ctx, order)
+	if err != nil {
+		return nil, status.Errorf(codes.InvalidArgument, "invalid order data")
 	}
-	return &proto.UpdateOrderResponse{}, nil
+	return &proto.UpdateOrderResponse{
+		Order: &proto.Order{
+			Id:       updatedOrder.ID,
+			Item:     updatedOrder.Item,
+			Quantity: updatedOrder.Quantity,
+		},
+	}, nil
 }
 
 func (s *Server) DeleteOrder(ctx context.Context, req *proto.DeleteOrderRequest) (*proto.DeleteOrderResponse, error) {
 	const op = "Server.DeleteOrder"
 	s.Logger.Infow("Received DeleteOrder request", "id", req.GetId(), "op", op)
-	if err := s.Service.DeleteOrder(ctx, req.GetId()); err != nil {
-		return nil, err
+	success, err := s.Service.DeleteOrder(ctx, req.GetId())
+	if err != nil {
+		return nil, status.Errorf(codes.InvalidArgument, "invalid order ID")
 	}
-	return &proto.DeleteOrderResponse{}, nil
+	return &proto.DeleteOrderResponse{Success: success}, nil
 }
 
 func (s *Server) ListOrders(ctx context.Context, req *proto.ListOrdersRequest) (*proto.ListOrdersResponse, error) {
@@ -93,7 +104,7 @@ func (s *Server) ListOrders(ctx context.Context, req *proto.ListOrdersRequest) (
 	s.Logger.Infow("Received ListOrders request", "op", op)
 	orders, err := s.Service.ListOrders(ctx)
 	if err != nil {
-		return nil, err
+		return nil, status.Errorf(codes.Internal, "failed to list orders")
 	}
 	var protoOrders []*proto.Order
 	for _, order := range orders {

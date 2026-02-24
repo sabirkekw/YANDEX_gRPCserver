@@ -19,7 +19,6 @@ type Config struct {
 		Port    int           `yaml:"port"`
 		Timeout time.Duration `yaml:"timeout"`
 	} `yaml:"grpc"`
-	TokenTTL time.Duration `yaml:"token_ttl"`
 }
 
 // done: implement config loading and validation

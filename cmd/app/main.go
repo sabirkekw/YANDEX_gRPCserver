@@ -2,6 +2,9 @@ package main
 
 import (
 	"fmt"
+	"os"
+	"os/signal"
+	"syscall"
 
 	"github.com/sabirkekw/YANDEX_gRPCserver/internal/app"
 	"github.com/sabirkekw/YANDEX_gRPCserver/internal/cfg"
@@ -18,13 +21,17 @@ func main() {
 	config := cfg.MustLoad()
 	logger.Log.Infow("Config loaded\n", "config", fmt.Sprintf("%+v", config))
 
-	db := make(map[string]*order.Order)
+	db := make(map[string]*order.OrderData)
 
 	orderService := orderservice.NewService(db, logger.Log)
 
 	application := app.New(logger.Log, config.GRPC.Port, db, orderService)
 
-	if err := application.GRPCServer.Run(); err != nil {
-		logger.Log.Fatalw("Failed to run gRPC server", "error", err)
-	}
+	go application.GRPCServer.Run()
+
+	stop := make(chan os.Signal, 1)
+	signal.Notify(stop, syscall.SIGINT, syscall.SIGTERM)
+	<-stop
+	application.GRPCServer.Stop()
+	logger.Log.Infow("Server received shutdown signal, exiting")
 }

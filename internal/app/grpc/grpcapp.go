@@ -27,7 +27,7 @@ func NewGRPCServer(log *zap.SugaredLogger, port int, service grpcserver.OrderSer
 	}
 }
 
-func (a *GRPCApp) Run() error {
+func (a *GRPCApp) Run() {
 	const op = "grpcapp.Run"
 
 	a.Logger.Infow("Starting gRPC server", "port", a.port)
@@ -35,18 +35,17 @@ func (a *GRPCApp) Run() error {
 	listener, err := net.Listen("tcp", fmt.Sprintf(":%d", a.port))
 	if err != nil {
 		a.Logger.Errorw("Failed to listen on port", "error", err, "op", op)
-		return err
+		return
 	}
 
 	if err := a.Server.Serve(listener); err != nil {
 		a.Logger.Errorw("Failed to start gRPC server", "error", err, "op", op)
-		return err
+		return
 	}
-	return nil
 }
 
 func (a *GRPCApp) Stop() {
 	const op = "grpcapp.Stop"
 	a.Logger.Infow("Stopping gRPC server", "op", op)
-	a.Server.Stop() // todo: graceful shutdown
+	a.Server.GracefulStop()
 }
